@@ -77,8 +77,8 @@ def pair_score(
         mat = substitution_matrices.Array(data=dict)
         aligner.substitution_matrix = mat
     if oe != (-3, -3):
-        aligner.open_gap_score = -3
-        aligner.extend_gap_score = -3
+        aligner.open_gap_score = oe[0]
+        aligner.extend_gap_score = oe[1]
     score = float(aligner.score(a, b))
     # normalize score by the length of the shorter work, so a 'perfect match'
     # would be 1
