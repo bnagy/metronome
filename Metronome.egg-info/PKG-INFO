@@ -1,0 +1,38 @@
+Metadata-Version: 2.1
+Name: Metronome
+Version: 0.0.1
+Summary: UNKNOWN
+Home-page: https://github.com/bnagy/metronome
+Author: Ben Nagy
+License: 3-Clause BSD
+Platform: UNKNOWN
+Description-Content-Type: text/markdown
+License-File: LICENSE.txt
+
+# Metronome [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
+
+## About
+
+## Installation
+
+pip install (something)
+
+## Usage
+
+
+## Citation
+
+
+## License & Acknowledgements
+
+Code: BSD style, see the [LICENSE](LICENSE.txt)
+
+## Contributing
+
+Fork and PR. Particularly welcome would be:
+- improving the packaging structure
+- tests
+- general addition of pythonicity
+
+

@@ -1,0 +1,10 @@
+LICENSE.txt
+README.md
+setup.py
+Metronome.egg-info/PKG-INFO
+Metronome.egg-info/SOURCES.txt
+Metronome.egg-info/dependency_links.txt
+Metronome.egg-info/requires.txt
+Metronome.egg-info/top_level.txt
+metronome/__init__.py
+metronome/scoring.py
