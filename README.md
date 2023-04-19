@@ -7,7 +7,7 @@ This is the metronome package. It is not fully cooked.
 
 ## Installation
 
-pip install git+https://github.com/bnagy/metronome@main
+`pip install git+https://github.com/bnagy/metronome@main`
 
 ## Usage
 
