@@ -1,4 +1,5 @@
 import pandas as pd
+import ray
 import Bio.Align
 from Bio.Align import substitution_matrices
 
@@ -27,6 +28,37 @@ mat = substitution_matrices.Array(data=MATCH_DICT)
 aligner.substitution_matrix = mat
 aligner.open_gap_score = -3
 aligner.extend_gap_score = -3
+
+
+@ray.remote
+def _row_compare(s: str, row: pd.Series) -> list[float]:
+    return [pair_score(s, x) for x in row]
+
+
+def dist_matrix_parallel(df: pd.DataFrame, col: str = "metronome") -> pd.DataFrame:
+    """
+    Take a set of n metronomes and produce an nxn matrix of distances, suitable
+    for passing to hclust in R. The 'distances' are constructed from the
+    BioPython local alignment score (higher is better), normalised by the length
+    of the shorter string at each pairwise comparison. Those scores yield 1 for
+    a perfect match, so the final matrix is 1 - normalised_score_matrix (small
+    distance is a closer match).
+
+    This version runs in parallel using ray.
+
+    In:
+        df (pd.DataFrame): data frame containing the metronomes col (str =
+        "metronome"): name of the metronome column
+
+    Returns:
+        pd.DataFrame: the matrix as a dataframe
+    """
+    if not col in df.columns:
+        raise ValueError(f"Column {col} not found in dataframe")
+    mtrx = []
+    for x in df[col]:
+        mtrx.append(_row_compare.remote(x, df[col].copy()))
+    return 1 - pd.DataFrame.from_records(ray.get(mtrx))
 
 
 def dist_matrix(df: pd.DataFrame, col: str = "metronome") -> pd.DataFrame:

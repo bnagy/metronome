@@ -11,9 +11,5 @@ setup(
     url="https://github.com/bnagy/metronome",
     long_description_content_type="text/markdown",
     long_description=open("README.md").read(),
-    install_requires=[
-        "setuptools",
-        "pandas",
-        "Bio",
-    ],
+    install_requires=["setuptools", "pandas", "Bio", "ray"],
 )
