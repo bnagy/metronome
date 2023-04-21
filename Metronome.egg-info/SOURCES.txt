@@ -7,4 +7,5 @@ Metronome.egg-info/dependency_links.txt
 Metronome.egg-info/requires.txt
 Metronome.egg-info/top_level.txt
 metronome/__init__.py
+metronome/sampling.py
 metronome/scoring.py
