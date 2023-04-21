@@ -16,7 +16,7 @@ def subset(df: pd.DataFrame, frm: int, to: int, meter: str) -> pd.DataFrame:
         pd.DataFrame: the results
     """
     return df.query(
-        f'year <= {to} and year >= {frm} and meter == "{meter}" and metronome.str.count("\|") >= 4'
+        f'year <= {to} and year >= {frm} and meter == "{meter}" and metronome.str.count("\\|") >= 4'
     )
 
 
