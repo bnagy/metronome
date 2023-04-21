@@ -4,7 +4,7 @@ import os
 
 setup(
     name="Metronome",
-    version="0.0.3",
+    version="0.0.4",
     author="Ben Nagy",
     packages=["metronome"],
     license="3-Clause BSD",
