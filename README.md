@@ -11,7 +11,7 @@ This is the metronome package. It is not fully cooked.
 
 ## Usage
 
-See the [examples][examples.ipynb]
+See the [examples](examples.ipynb)
 
 ## Citation
 
