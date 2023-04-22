@@ -14,10 +14,10 @@ MATCH_DICT = {
     # penalise non-alignment at line ends more, because they're rarer. The idea
     # is to stop hendecasyllables being routinely padded out to match hexameter
     # lines
-    ("|", "S"): -3,
-    ("|", "w"): -3,
-    ("|", "."): -3,
-    ("w", "S"): -1,
+    ("|", "S"): -4,
+    ("|", "w"): -4,
+    ("|", "."): -4,
+    ("w", "S"): 0,
     ("w", "."): 0,  # not sure. In theory we don't care if spaces mismatch
     ("S", "."): 0,  # because metre isn't based on a fixed number of words
 }
@@ -25,7 +25,7 @@ MATCH_DICT = {
 
 class Scorer:
     def __init__(
-        self, mode: str = "local", match_dict: dict = MATCH_DICT, oe: tuple = (-3, -3)
+        self, mode: str = "local", match_dict: dict = MATCH_DICT, oe: tuple = (-6, -3)
     ):
         self.aligner = Bio.Align.PairwiseAligner()
         self.aligner.mode = mode
