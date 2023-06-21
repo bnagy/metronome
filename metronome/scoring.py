@@ -25,14 +25,25 @@ MATCH_DICT = {
 
 class Scorer:
     def __init__(
-        self, mode: str = "local", match_dict: dict = MATCH_DICT, oe: tuple = (-6, -3)
+        self, mode: str = "local", match_dict: dict[tuple[str, str], float] = MATCH_DICT, oe: tuple = (-6, -3)
     ):
         self.aligner = Bio.Align.PairwiseAligner()
         self.aligner.mode = mode
+        self._complete_dictionary(match_dict)
         mat = substitution_matrices.Array(data=match_dict)
         self.aligner.substitution_matrix = mat
         self.aligner.open_gap_score = oe[0]
         self.aligner.extend_gap_score = oe[1]
+
+    @staticmethod
+    def _complete_dictionary(match_dict: dict[tuple[str, str], float]):
+        keys = match_dict.keys()
+        additions = dict()
+        for key in keys:
+            reverse = key[::-1]
+            if reverse not in match_dict:
+                additions[reverse] = match_dict[key]
+        match_dict |= additions
 
     @ray.remote
     def _row_compare(self, s: str, row: pd.Series) -> list[float]:
