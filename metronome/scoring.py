@@ -4,13 +4,10 @@ import Bio.Align
 from Bio.Align import substitution_matrices
 
 MATCH_DICT = {
-    ("|", "|"): 2,
-    ("w", "w"): 2,
-    ("S", "S"): 2,
-    # TODO it's kind of better to decrease the space vs space bonus, along the
-    # same lines as reducing the penalty for mismatches, but then when you scale
-    # a perfect match turns out to be less than 1, which is bad.
-    (".", "."): 2,
+    ("|", "|"): 2.5,
+    ("w", "w"): 1.5,
+    ("S", "S"): 2.5,
+    (".", "."): 1,
     # penalise non-alignment at line ends more, because they're rarer. The idea
     # is to stop hendecasyllables being routinely padded out to match hexameter
     # lines
@@ -33,7 +30,7 @@ class Scorer:
         mode: str = MODE,
         match_dict: dict[tuple[str, str], float] = MATCH_DICT,
         open_gap_score: float = OPEN_GAP_SCORE,
-        extend_gap_score: float = EXTEND_GAP_SCORE
+        extend_gap_score: float = EXTEND_GAP_SCORE,
     ):
         self.aligner = Bio.Align.PairwiseAligner()
         self.aligner.mode = mode
@@ -53,8 +50,13 @@ class Scorer:
         match_dict |= additions
 
     @ray.remote
-    def _row_compare(self, s: str, row: pd.Series) -> list[float]:
-        return [self.pair_score(s, x) for x in row]
+    def _row_compare_idx(self, idx: int, row: pd.Series) -> list[float]:
+        r = [1.0] * len(row)
+        for i, x in enumerate(row):
+            if i > idx:
+                break
+            r[i] = self.pair_score(row[idx], x)
+        return r
 
     def dist_matrix_parallel(
         self, df: pd.DataFrame, col: str = "metronome"
@@ -70,19 +72,24 @@ class Scorer:
         This version runs in parallel using ray.
 
         In:
-            df (pd.DataFrame): data frame containing the metronomes col (str =
-            "metronome"): name of the metronome column
+            df (pd.DataFrame): data frame containing the metronomes
+
+            col (str ="metronome"): name of the metronome column
 
         Returns:
             pd.DataFrame: the matrix as a dataframe
         """
         if not col in df.columns:
             raise ValueError(f"Column {col} not found in dataframe")
+
         df = df.copy().reset_index(drop=True)
         mtrx = []
-        for x in df[col]:
-            mtrx.append(self._row_compare.remote(self, x, df[col].copy()))
-        return 1 - pd.DataFrame.from_records(ray.get(mtrx))
+        # set up the ray futures, concurrency at the level of rows
+        for i, _ in enumerate(df[col]):
+            mtrx.append(self._row_compare_idx.remote(self, i, df[col].copy()))
+        # this blocks until all the rows are done
+        lower_dm = 1 - pd.DataFrame.from_records(ray.get(mtrx))
+        return lower_dm + lower_dm.T
 
     def dist_matrix(self, df: pd.DataFrame, col: str = "metronome") -> pd.DataFrame:
         """
@@ -94,76 +101,56 @@ class Scorer:
         distance is a closer match).
 
         In:
-            df (pd.DataFrame): data frame containing the metronomes col (str =
-            "metronome"): name of the metronome column
+            df (pd.DataFrame): data frame containing the metronomes
+
+            col (str ="metronome"): name of the metronome column
 
         Returns:
             pd.DataFrame: the matrix as a dataframe
         """
         df = df.copy().reset_index(drop=True)
+        mtrx = []
         if not col in df.columns:
             raise ValueError(f"Column {col} not found in dataframe")
-        mtrx = df[col].apply(lambda str: [self.pair_score(str, x) for x in df[col]])
-        # the score is a match strength (1 for perfect) whereas we want a distance
-        # here (0 for identical)
-        return 1 - pd.DataFrame.from_records(mtrx)
+
+        for i, x in enumerate(df[col]):
+            r = [1.0] * len(df[col])
+            for j, x in enumerate(df[col]):
+                # calculate only the lower triangle
+                if j > i:
+                    break
+                r[j] = self.pair_score(df[col][i], x)
+            mtrx.append(r)
+        lower_dm = 1 - pd.DataFrame.from_records(mtrx)
+        # mirror across the diagonal
+        return lower_dm + lower_dm.T
 
     def pair_score(
-            self,
-            a: str,
-            b: str,
-            scale: bool = True,
-            mode: str = None,
-            match_dict: dict[tuple[str, str], float] = None,
-            open_gap_score: float = None,
-            extend_gap_score: float = None
+        self,
+        a: str,
+        b: str,
+        scale: bool = True,
     ) -> float:
         """
-        For two metronome strings, output a pairwise score (higher is a better
-        match). This method allows for some lower level tuning, eg by supplying a
-        custom match dict to set the match / mismatch scores for each pair of
-        symbols in the alphabet.
-
-        If any of [mode, match_dict, open_gap_score, extend_gap_score] are set, then
-        the ones that aren't are set to the same values the class was built with.
+        For two metronome strings, output a pairwise score in [0,1] (higher is a
+        better match).
 
         In:
-            a, b (str): strings to compare scale (bool = True): whether to normalise
-                by the length of the shorter string. Set to False to get the raw BioPython
-                score
-            mode (str): sets the comparison mode.  Accepts "local" and "global".
-            match_dict (dict): match dict to use for alignment scoring See BioPython
-                docs for details. Uses Bio.Align.PairwiseAligner internally.
-            open_gap_score (float): Open penalty for gaps
-            extend_gap_score (float): Extend penalty for gaps
+            a, b (str): strings to compare
+
+            scale (bool = True): whether to normalise by the length of the
+            shorter string. Set to False to get the raw BioPython score
 
         Returns:
             float: the score
         """
-        if mode is None and match_dict is None and open_gap_score is None and extend_gap_score is None:
-            aligner = self.aligner
-        else:
-            aligner = Bio.Align.PairwiseAligner()
-            if mode is None:
-                mode = self.aligner.mode
-            aligner.mode = mode
-            if match_dict is None:
-                aligner.substitution_matrix = self.aligner.substitution_matrix
-            else:
-                self._complete_dictionary(match_dict)
-                sm = substitution_matrices.Array(data=match_dict)
-                aligner.substitution_matrix = sm
-            if open_gap_score is None:
-                open_gap_score = self.aligner.open_gap_score
-            aligner.open_gap_score = open_gap_score
-            if extend_gap_score is None:
-                extend_gap_score = self.aligner.extend_gap_score
-            aligner.extend_gap_score = extend_gap_score
-        score = float(aligner.score(a, b))
-        # normalize score by the length of the shorter work, so a 'perfect match'
+
+        score = float(self.aligner.score(a, b))
+        # normalize score by the self-score of the shorter work, so a 'perfect match'
         # would be 1
         if not scale:
             return float(score)
-        lendiv = min(len(a), len(b))
-        return score / lendiv / 2.0
-
+        if len(a) >= len(b):
+            return score / self.aligner.score(b, b)
+        else:
+            return score / self.aligner.score(a, a)
