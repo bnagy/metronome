@@ -22,17 +22,35 @@ MATCH_DICT = {
     ("S", "."): 0,  # because metre isn't based on a fixed number of words
 }
 
+OPEN_GAP_SCORE = -6
+EXTEND_GAP_SCORE = -3
+MODE = "local"
+
 
 class Scorer:
     def __init__(
-        self, mode: str = "local", match_dict: dict = MATCH_DICT, oe: tuple = (-6, -3)
+        self,
+        mode: str = MODE,
+        match_dict: dict[tuple[str, str], float] = MATCH_DICT,
+        open_gap_score: float = OPEN_GAP_SCORE,
+        extend_gap_score: float = EXTEND_GAP_SCORE
     ):
         self.aligner = Bio.Align.PairwiseAligner()
         self.aligner.mode = mode
+        self._complete_dictionary(match_dict)
         mat = substitution_matrices.Array(data=match_dict)
         self.aligner.substitution_matrix = mat
-        self.aligner.open_gap_score = oe[0]
-        self.aligner.extend_gap_score = oe[1]
+        self.aligner.open_gap_score = open_gap_score
+        self.aligner.extend_gap_score = extend_gap_score
+
+    @staticmethod
+    def _complete_dictionary(match_dict: dict[tuple[str, str], float]):
+        additions = dict()
+        for key in match_dict:
+            reverse = key[::-1]
+            if reverse not in match_dict:
+                additions[reverse] = match_dict[key]
+        match_dict |= additions
 
     @ray.remote
     def _row_compare(self, s: str, row: pd.Series) -> list[float]:
@@ -90,30 +108,62 @@ class Scorer:
         # here (0 for identical)
         return 1 - pd.DataFrame.from_records(mtrx)
 
-    def pair_score(self, a, b: str, scale: bool = True) -> float:
+    def pair_score(
+            self,
+            a: str,
+            b: str,
+            scale: bool = True,
+            mode: str = None,
+            match_dict: dict[tuple[str, str], float] = None,
+            open_gap_score: float = None,
+            extend_gap_score: float = None
+    ) -> float:
         """
         For two metronome strings, output a pairwise score (higher is a better
         match). This method allows for some lower level tuning, eg by supplying a
         custom match dict to set the match / mismatch scores for each pair of
         symbols in the alphabet.
 
+        If any of [mode, match_dict, open_gap_score, extend_gap_score] are set, then
+        the ones that aren't are set to the same values the class was built with.
+
         In:
             a, b (str): strings to compare scale (bool = True): whether to normalise
-            by the length of the shorter
-                string. Set to False to get the raw BioPython score
+                by the length of the shorter string. Set to False to get the raw BioPython
+                score
+            mode (str): sets the comparison mode.  Accepts "local" and "global".
             match_dict (dict): match dict to use for alignment scoring See BioPython
                 docs for details. Uses Bio.Align.PairwiseAligner internally.
-            oe (tuple = (-3, -3)): Open and extend penalties for gaps
+            open_gap_score (float): Open penalty for gaps
+            extend_gap_score (float): Extend penalty for gaps
 
         Returns:
             float: the score
         """
-        score = float(self.aligner.score(a, b))
+        if mode is None and match_dict is None and open_gap_score is None and extend_gap_score is None:
+            aligner = self.aligner
+        else:
+            aligner = Bio.Align.PairwiseAligner()
+            if mode is None:
+                mode = self.aligner.mode
+            aligner.mode = mode
+            if match_dict is None:
+                aligner.substitution_matrix = self.aligner.substitution_matrix
+            else:
+                self._complete_dictionary(match_dict)
+                sm = substitution_matrices.Array(data=match_dict)
+                aligner.substitution_matrix = sm
+            if open_gap_score is None:
+                open_gap_score = self.aligner.open_gap_score
+            aligner.open_gap_score = open_gap_score
+            if extend_gap_score is None:
+                extend_gap_score = self.aligner.extend_gap_score
+            aligner.extend_gap_score = extend_gap_score
+        score = float(aligner.score(a, b))
         # normalize score by the length of the shorter work, so a 'perfect match'
         # would be 1
         if not scale:
-            return score
-        if len(a) >= len(b):
-            return score / len(b) / 2
-        else:
-            return score / len(a) / 2
+            return float(score)
+        lendiv = min(len(a), len(b))
+        return score / lendiv / 2.0
+
