@@ -4,9 +4,9 @@ import Bio.Align
 from Bio.Align import substitution_matrices
 
 MATCH_DICT = {
-    ("|", "|"): 2.5,
-    ("w", "w"): 1.5,
-    ("S", "S"): 2.5,
+    ("|", "|"): 3.5,
+    ("w", "w"): 2.5,
+    ("S", "S"): 3,
     (".", "."): 1,
     # penalise non-alignment at line ends more, because they're rarer. The idea
     # is to stop hendecasyllables being routinely padded out to match hexameter
@@ -14,7 +14,7 @@ MATCH_DICT = {
     ("|", "S"): -4,
     ("|", "w"): -4,
     ("|", "."): -4,
-    ("w", "S"): 0,
+    ("w", "S"): -0.25,
     ("w", "."): 0,  # not sure. In theory we don't care if spaces mismatch
     ("S", "."): 0,  # because metre isn't based on a fixed number of words
 }
@@ -113,7 +113,7 @@ class Scorer:
         if not col in df.columns:
             raise ValueError(f"Column {col} not found in dataframe")
 
-        for i, x in enumerate(df[col]):
+        for i, _ in enumerate(df[col]):
             r = [1.0] * len(df[col])
             for j, x in enumerate(df[col]):
                 # calculate only the lower triangle
