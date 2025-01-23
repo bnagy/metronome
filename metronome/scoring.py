@@ -59,7 +59,7 @@ class Scorer:
         return r
 
     def dist_matrix_parallel(
-        self, df: pd.DataFrame, col: str = "metronome"
+        self, df: pd.DataFrame, col: str = "metronome", backpressure: int = 128
     ) -> pd.DataFrame:
         """
         Take a set of n metronomes and produce an nxn matrix of distances, suitable
@@ -84,8 +84,12 @@ class Scorer:
 
         df = df.copy().reset_index(drop=True)
         mtrx = []
+
         # set up the ray futures, concurrency at the level of rows
         for i, _ in enumerate(df[col]):
+            if len(mtrx) > backpressure:
+                ready, mtrx = ray.wait(mtrx, num_returns=1)
+                ray.get(ready)
             mtrx.append(self._row_compare_idx.remote(self, i, df[col].copy()))
         # this blocks until all the rows are done
         lower_dm = 1 - pd.DataFrame.from_records(ray.get(mtrx))
