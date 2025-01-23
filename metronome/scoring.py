@@ -28,7 +28,7 @@ class Scorer:
     def __init__(
         self,
         mode: str = MODE,
-        match_dict: dict[tuple[str, str], float] = MATCH_DICT,
+        match_dict: dict[tuple[str, str], float] = MATCH_DICT,  # type: ignore
         open_gap_score: float = OPEN_GAP_SCORE,
         extend_gap_score: float = EXTEND_GAP_SCORE,
     ):
