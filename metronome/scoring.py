@@ -86,14 +86,13 @@ class Scorer:
             raise ValueError(f"Column {col} not found in dataframe")
 
         df = df.copy().reset_index(drop=True)
+        col_ref = ray.put(df[col].copy())
         mtrx = []
 
         # set up the ray futures, concurrency at the level of rows
         for i, _ in enumerate(df[col]):
             mtrx.append(
-                self._row_compare_idx.options(memory=mem_limit).remote(
-                    self, i, df[col].copy()
-                )
+                self._row_compare_idx.options(memory=mem_limit).remote(self, i, col_ref)
             )
         # this blocks until all the rows are done
         lower_dm = 1 - pd.DataFrame.from_records(ray.get(mtrx))
