@@ -63,6 +63,7 @@ class Scorer:
         df: pd.DataFrame,
         col: str = "metronome",
         mem_limit: int = 1 * 1024 * 1024 * 1024,
+        batchsize: int = 256,  # if you have more than 256 cores for poetry analysis pls hire me
     ) -> pd.DataFrame:
         """
         Take a set of n metronomes and produce an nxn matrix of distances, suitable
@@ -89,13 +90,23 @@ class Scorer:
         col_ref = ray.put(df[col].copy())
         mtrx = []
 
-        # set up the ray futures, concurrency at the level of rows
-        for i, _ in enumerate(df[col]):
-            mtrx.append(
-                self._row_compare_idx.options(memory=mem_limit).remote(self, i, col_ref)
-            )
-        # this blocks until all the rows are done
-        lower_dm = 1 - pd.DataFrame.from_records(ray.get(mtrx))
+        # We had some OOMs on lorge boxes, so here we try to only have +batchsize+ ray jobs in
+        # flight at one time. This is only only way I know to have the results stay in order. The
+        # standard ray backpressure pattern using ray.wait returns results in completion order.
+        results = []
+        start = 0
+        while start < len(df[col]):
+            for i in range(start, start + batchsize):
+                if i >= len(df[col]):
+                    break
+                mtrx.append(
+                    self._row_compare_idx.options(memory=mem_limit).remote(
+                        self, i, col_ref
+                    )
+                )
+            results.extend(ray.get(mtrx[start : start + batchsize]))
+            start += batchsize
+        lower_dm = 1 - pd.DataFrame.from_records(results)
         return lower_dm + lower_dm.T
 
     def dist_matrix(self, df: pd.DataFrame, col: str = "metronome") -> pd.DataFrame:
