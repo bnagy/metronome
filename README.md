@@ -1,9 +1,8 @@
 # Metronome [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-
 ## About
 
-This is the metronome package. It is not fully cooked.
+This is the metronome package.
 
 ## Installation
 
@@ -15,6 +14,7 @@ See the [examples](examples.ipynb)
 
 ## Citation
 
+Forthcoming in Computation Humanities Research (CUP). See [the preprint repo](https://github.com/bnagy/metronome-paper).
 
 ## License & Acknowledgements
 
