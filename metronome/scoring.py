@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import ray
 import Bio.Align
 from Bio.Align import substitution_matrices
@@ -62,11 +63,17 @@ class Scorer:
         self,
         df: pd.DataFrame,
         col: str = "metronome",
-        mem_limit: int = 1 * 1024 * 1024 * 1024,
         batch_size: int = 1000,  # Process results in batches
     ) -> pd.DataFrame:
         """
         Compute a pairwise distance matrix in parallel using Ray and NumPy.
+
+        In:
+            df (pd.DataFrame): data frame containing the metronomes
+
+            col (str ="metronome"): name of the metronome column
+
+            batch_size (optional int = 1000): Limit for simultaneous ray futures
 
         Returns:
             pd.DataFrame: The final distance matrix.
@@ -75,30 +82,25 @@ class Scorer:
             raise ValueError(f"Column {col} not found in dataframe")
 
         df = df.copy().reset_index(drop=True)
-
-        # Convert column to NumPy for efficiency
         col_values = df[col].to_numpy()
-        
-        # Store column in Ray shared memory
         col_ref = ray.put(col_values)
-
-        # Pre-allocate NumPy array
+        # Pre-allocate result array
         n = len(col_values)
-        results = np.zeros((n, n), dtype=np.float64)  
+        results = np.zeros((n, n), dtype=np.float64)
 
         # Launch parallel tasks in batches
         for batch_start in range(0, n, batch_size):
             batch_end = min(batch_start + batch_size, n)
-
-            # Process a batch
+            # doing this in the loop lets the futures be GCd one they have been fetched
             batch_futures = [
-                self._row_compare_idx.remote(self, i, col_ref) for i in range(batch_start, batch_end)
+                self._row_compare_idx.remote(self, i, col_ref)
+                for i in range(batch_start, batch_end)
             ]
-
             batch_results = ray.get(batch_futures)  # Fetch only this batch
-
-            # Store in pre-allocated NumPy array
-            results[batch_start:batch_end, :] = np.array(batch_results, dtype=np.float64)
+            # update result array one batch at a time. We treat the nxn result array as 1d here
+            results[batch_start:batch_end, :] = np.array(
+                batch_results, dtype=np.float64
+            )
 
         # Convert to distance matrix
         lower_dm = 1 - results
