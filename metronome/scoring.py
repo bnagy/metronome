@@ -63,51 +63,47 @@ class Scorer:
         df: pd.DataFrame,
         col: str = "metronome",
         mem_limit: int = 1 * 1024 * 1024 * 1024,
-        batchsize: int = 256,  # if you have more than 256 cores for poetry analysis pls hire me
+        batch_size: int = 1000,  # Process results in batches
     ) -> pd.DataFrame:
         """
-        Take a set of n metronomes and produce an nxn matrix of distances, suitable
-        for passing to hclust in R. The 'distances' are constructed from the
-        BioPython local alignment score (higher is better), normalised by the length
-        of the shorter string at each pairwise comparison. Those scores yield 1 for
-        a perfect match, so the final matrix is 1 - normalised_score_matrix (small
-        distance is a closer match).
-
-        This version runs in parallel using ray.
-
-        In:
-            df (pd.DataFrame): data frame containing the metronomes
-
-            col (str ="metronome"): name of the metronome column
+        Compute a pairwise distance matrix in parallel using Ray and NumPy.
 
         Returns:
-            pd.DataFrame: the matrix as a dataframe
+            pd.DataFrame: The final distance matrix.
         """
-        if not col in df.columns:
+        if col not in df.columns:
             raise ValueError(f"Column {col} not found in dataframe")
 
         df = df.copy().reset_index(drop=True)
-        col_ref = ray.put(df[col].copy())
-        mtrx = []
 
-        # We had some OOMs on lorge boxes, so here we try to only have +batchsize+ ray jobs in
-        # flight at one time. This is only only way I know to have the results stay in order. The
-        # standard ray backpressure pattern using ray.wait returns results in completion order.
-        results = []
-        start = 0
-        while start < len(df[col]):
-            for i in range(start, start + batchsize):
-                if i >= len(df[col]):
-                    break
-                mtrx.append(
-                    self._row_compare_idx.options(memory=mem_limit).remote(
-                        self, i, col_ref
-                    )
-                )
-            results.extend(ray.get(mtrx[start : start + batchsize]))
-            start += batchsize
-        lower_dm = 1 - pd.DataFrame.from_records(results)
-        return lower_dm + lower_dm.T
+        # Convert column to NumPy for efficiency
+        col_values = df[col].to_numpy()
+        
+        # Store column in Ray shared memory
+        col_ref = ray.put(col_values)
+
+        # Pre-allocate NumPy array
+        n = len(col_values)
+        results = np.zeros((n, n), dtype=np.float64)  
+
+        # Launch parallel tasks in batches
+        for batch_start in range(0, n, batch_size):
+            batch_end = min(batch_start + batch_size, n)
+
+            # Process a batch
+            batch_futures = [
+                self._row_compare_idx.remote(self, i, col_ref) for i in range(batch_start, batch_end)
+            ]
+
+            batch_results = ray.get(batch_futures)  # Fetch only this batch
+
+            # Store in pre-allocated NumPy array
+            results[batch_start:batch_end, :] = np.array(batch_results, dtype=np.float64)
+
+        # Convert to distance matrix
+        lower_dm = 1 - results
+        df = pd.DataFrame(lower_dm + lower_dm.T)  # Mirror across diagonal
+        return df
 
     def dist_matrix(self, df: pd.DataFrame, col: str = "metronome") -> pd.DataFrame:
         """
