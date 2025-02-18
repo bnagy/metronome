@@ -1,20 +1,28 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: Metronome
-Version: 0.1.1
-Summary: UNKNOWN
+Version: 0.2.2
 Home-page: https://github.com/bnagy/metronome
 Author: Ben Nagy
 License: 3-Clause BSD
-Platform: UNKNOWN
 Description-Content-Type: text/markdown
 License-File: LICENSE.txt
+Requires-Dist: setuptools
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: Bio
+Requires-Dist: ray
+Dynamic: author
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: requires-dist
 
 # Metronome [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-
 ## About
 
-This is the metronome package. It is not fully cooked.
+This is the metronome package.
 
 ## Installation
 
@@ -26,6 +34,7 @@ See the [examples](examples.ipynb)
 
 ## Citation
 
+Forthcoming in Computation Humanities Research (CUP). See [the preprint repo](https://github.com/bnagy/metronome-paper).
 
 ## License & Acknowledgements
 
@@ -37,5 +46,3 @@ Fork and PR. Particularly welcome would be:
 - improving the packaging structure
 - tests
 - general addition of pythonicity
-
-
